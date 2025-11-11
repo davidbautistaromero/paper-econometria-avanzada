@@ -23,14 +23,19 @@ python -m playwright install chromium
 ```
 final-paper/
 ├── datasets/
-│   └── 01_raw/                                # Datos crudos sin procesar
-│       ├── secop_contratacion.csv             # Base de datos SECOP contratación
-│       ├── secop_proponentes.csv              # Base de datos SECOP proponentes
-│       └── resultados_{departamento}_{año}.csv # Resultados electorales por depto/año
+│   ├── 01_raw/                                # Datos crudos sin procesar
+│   │   ├── secop_contratacion.csv             # Base de datos SECOP contratación
+│   │   ├── secop_proponentes.csv              # Base de datos SECOP proponentes
+│   │   └── resultados_{departamento}_{año}.csv # Resultados electorales por depto/año
+│   └── 02_intermediate/                       # Datos procesados intermedios
+│       ├── resultados_electorales_intermediate.csv # Top 2 candidatos por municipio
+│       └── alcaldes_ganadores_2015.csv        # Alcaldes ganadores 2015
 ├── scripts/
 │   ├── extract_secop_contratacion.py      # Extrae datos de contratación
 │   ├── extract_secop_proponentes.py       # Extrae datos de proponentes
-│   └── extract_resultados_electorales.py  # Extrae resultados electorales
+│   ├── extract_resultados_electorales.py  # Extrae resultados electorales
+│   ├── extract_alcaldes_2015.py           # Extrae alcaldes ganadores 2015 (Wikipedia)
+│   └── process_resultados_alcaldias.py    # Procesa resultados de alcaldías
 └── requirements.txt
 ```
 
@@ -87,6 +92,40 @@ python scripts/extract_resultados_electorales.py
   - Limpieza automática de archivos ZIP después de extracción
   - Skip automático de archivos ya descargados
 
+### 4. Procesamiento de resultados de alcaldías
+
+Procesa los resultados electorales para obtener los top 2 candidatos por municipio:
+
+```bash
+python scripts/process_resultados_alcaldias.py
+```
+
+- **Entrada**: `datasets/01_raw/resultados_*_2019.csv`
+- **Salida**: `datasets/02_intermediate/resultados_electorales_intermediate.csv`
+- **Características**:
+  - Filtra solo resultados de alcaldías
+  - Excluye votos no marcados, en blanco y nulos
+  - Agrupa y suma votos por candidato en cada municipio
+  - Extrae top 2 candidatos con más votos por municipio
+  - Consolida todos los departamentos en un solo archivo
+  - Incluye información de departamento, municipio, candidato y partido
+
+### 5. Extracción de alcaldes ganadores 2015
+
+Extrae información de alcaldes ganadores en 2015 desde Wikipedia:
+
+```bash
+python scripts/extract_alcaldes_2015.py
+```
+
+- **Fuente**: Wikipedia - Elecciones regionales de Colombia de 2015
+- **Salida**: `datasets/02_intermediate/alcaldes_ganadores_2015.csv`
+- **Características**:
+  - Web scraping con BeautifulSoup
+  - Extrae alcaldes ganadores por municipio
+  - Incluye departamento, municipio, candidato ganador y partido
+  - Datos consolidados de todo el país
+
 ## 📊 Información de los datasets
 
 ### SECOP Contratación
@@ -106,11 +145,28 @@ Incluye información sobre:
 - Proveedor/Proponente
 - NITs y códigos
 
-### Resultados Electorales
+### Resultados Electorales (Raw)
 Incluye información sobre:
-- Resultados por departamento
+- Resultados por departamento y municipio
 - Datos de elecciones 2019 y 2023
+- Votos por mesa, candidato y corporación
 - Información electoral detallada
+
+### Resultados Electorales (Intermediate)
+Dataset procesado con:
+- Top 2 candidatos con más votos por municipio
+- Solo elecciones de alcaldía (2019)
+- Votos válidos (excluye blancos, nulos y no marcados)
+- Datos consolidados de todos los departamentos
+- Información de candidato, partido y municipio
+
+### Alcaldes Ganadores 2015
+Dataset extraído de Wikipedia con:
+- Alcaldes ganadores por municipio (2015)
+- Departamento y municipio
+- Nombre del candidato ganador
+- Partido político del ganador
+- Datos de todo el país
 
 ## ⚙️ Configuración
 
