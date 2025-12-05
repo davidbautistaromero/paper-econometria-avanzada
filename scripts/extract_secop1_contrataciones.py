@@ -13,10 +13,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class SecopDataExtractor:
-    """Extractor for SECOP Contratación data from Socrata API"""
+class Secop1DataExtractor:
+    """Extractor for SECOP I Contratación data from Socrata API"""
     
-    def __init__(self, base_url="https://www.datos.gov.co/resource/p6dx-8zbt.json"):
+    def __init__(self, base_url="https://www.datos.gov.co/resource/f789-7hwg.json"):
+        # Note: The user provided https://www.datos.gov.co/api/v3/views/f789-7hwg/query.json
+        # but typically for extraction we use the resource endpoint.
+        # The resource ID is f789-7hwg.
         self.base_url = base_url
         self.batch_size = 50000  # Socrata's max limit per request
         
@@ -63,7 +66,7 @@ class SecopDataExtractor:
                     logger.error(f"Failed to fetch batch after {max_retries} attempts: {e}")
                     raise
     
-    def extract_all_data(self, output_file="datasets/01_raw/secop_contratacion.csv", 
+    def extract_all_data(self, output_file="datasets/01_raw/secop1_contratacion.csv", 
                         save_chunks=True):
         """
         Extract all data from the API with pagination
@@ -109,7 +112,7 @@ class SecopDataExtractor:
                 
                 # Save intermediate chunks if requested
                 if save_chunks and len(all_data) >= 100000:
-                    chunk_file = output_path.parent / f"chunk_{chunk_number:04d}.csv"
+                    chunk_file = output_path.parent / f"secop1_chunk_{chunk_number:04d}.csv"
                     df_chunk = pd.DataFrame(all_data)
                     df_chunk.to_csv(chunk_file, index=False, encoding='utf-8-sig')
                     logger.info(f"Saved chunk {chunk_number} with {len(all_data):,} records to {chunk_file}")
@@ -140,7 +143,7 @@ class SecopDataExtractor:
         if all_data:
             if chunk_number > 0:
                 # Save final chunk
-                chunk_file = output_path.parent / f"chunk_{chunk_number:04d}.csv"
+                chunk_file = output_path.parent / f"secop1_chunk_{chunk_number:04d}.csv"
                 df_final = pd.DataFrame(all_data)
                 df_final.to_csv(chunk_file, index=False, encoding='utf-8-sig')
                 logger.info(f"Saved final chunk {chunk_number} with {len(all_data):,} records")
@@ -162,7 +165,7 @@ class SecopDataExtractor:
     
     def merge_chunks(self, chunks_dir, output_file):
         """Merge all chunk files into a single CSV"""
-        chunk_files = sorted(chunks_dir.glob("chunk_*.csv"))
+        chunk_files = sorted(chunks_dir.glob("secop1_chunk_*.csv"))
         
         if not chunk_files:
             logger.warning("No chunk files found to merge")
@@ -188,16 +191,16 @@ class SecopDataExtractor:
 
 def main():
     """Main execution function"""
-    extractor = SecopDataExtractor()
+    extractor = Secop1DataExtractor()
     
     # Extract all data
     extractor.extract_all_data(
-        output_file="datasets/01_raw/secop_contratacion.csv",
+        output_file="datasets/01_raw/secop1_contratacion.csv",
         save_chunks=True  # Save intermediate chunks for safety
     )
     
     # Print summary
-    output_file = Path("datasets/01_raw/secop_contratacion.csv")
+    output_file = Path("datasets/01_raw/secop1_contratacion.csv")
     if output_file.exists():
         df = pd.read_csv(output_file, nrows=5)
         logger.info(f"\nDataset shape: {len(df):,} rows (showing first 5)")
