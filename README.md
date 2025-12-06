@@ -1,216 +1,109 @@
-# Proyecto de Extracción de Datos - Econometría Avanzada
+# Análisis de Contratación Pública y Resultados Electorales en Colombia
 
-Este proyecto contiene scripts para extraer datos de diferentes fuentes relacionadas con contratación pública y resultados electorales en Colombia.
+Este proyecto implementa un flujo de trabajo de datos (ETL) y análisis econométrico para estudiar la relación entre los resultados electorales (específicamente márgenes de victoria y candidatos "outsiders") y los patrones de contratación pública en municipios de Colombia.
 
-## 📋 Requisitos
+El análisis principal utiliza un Diseño de Regresión Discontinua (RDD) para estimar efectos causales en el uso de modalidades de contratación simplificada.
 
-### Instalación de dependencias
+## Estructura del Proyecto
 
+El proyecto sigue una estructura organizada por niveles de procesamiento de datos:
+
+```
+.
+├── datasets/               # Almacenamiento de datos
+│   ├── 01_raw/            # Datos crudos (Resultados electorales, SECOP I/II)
+│   ├── 02_intermediate/   # Datos procesados y limpios individualmente
+│   ├── 03_primary/        # Datos unificados (SECOP consolidado, Outsiders)
+│   └── 04_mart/           # Base final lista para análisis (con controles)
+├── scripts/                # Scripts de Python y R para ETL y análisis
+├── stores/                 # Salidas del análisis (Gráficos PNG, Tablas LaTeX)
+├── requirements.txt        # Dependencias de Python
+└── README.md               # Documentación del proyecto
+```
+
+## Fuentes de Datos
+
+El proyecto se alimenta de dos fuentes principales de información pública colombiana:
+
+1.  **Resultados Electorales (2019):**
+    *   **Origen:** Registraduría Nacional del Estado Civil.
+    *   **Contenido:** Resultados detallados mesa a mesa o agregados por municipio para las elecciones de autoridades locales (Alcaldes).
+    *   **Ubicación:** `datasets/01_raw/resultados_*_2019.csv`.
+
+2.  **Contratación Pública (SECOP I y II):**
+    *   **Origen:** Portal de Datos Abiertos del Estado Colombiano (Colombia Compra Eficiente).
+    *   **Contenido:** Registros históricos de procesos de contratación estatal.
+    *   **Ubicación:** `datasets/01_raw/secop*.csv`.
+
+## Proceso de Limpieza y Transformación
+
+El pipeline de datos realiza una limpieza exhaustiva para asegurar la calidad del análisis econométrico.
+
+### 1. Procesamiento Electoral (`scripts/process_resultados_alcaldias.py` y `outsiders.py`)
+*   **Filtrado:** Se seleccionan exclusivamente las elecciones para **Alcaldía**.
+*   **Depuración:** Se eliminan votos nulos, no marcados y en blanco.
+*   **Clasificación de Partidos:** Se define una lista de partidos "Tradicionales" (ej. Liberal, Conservador, Centro Democrático, Cambio Radical, La U, etc.). Cualquier partido o movimiento no incluido en esta lista se clasifica como **"Outsider"**.
+*   **Cálculo de Margen de Victoria:**
+    *   Se identifican los dos candidatos con más votos en cada municipio (Top 2).
+    *   Se filtra para mantener solo municipios "mixtos" (donde compite un Outsider vs. un Tradicional).
+    *   **Variable de Ejecución (Running Variable):** Margen de victoria = (Votos Outsider - Votos Tradicional) / (Total Votos Top 2).
+
+### 2. Procesamiento de Contratación (`scripts/secop.py`)
+*   **Unificación:** Se concatenan y homologan los esquemas de **SECOP I** y **SECOP II**.
+*   **Filtros de Calidad:**
+    *   **Temporal:** Se conservan adjudicaciones entre **2015 y 2023**.
+    *   **Institucional:** Se filtra por entidades que contengan "Alcaldía" o "Municipio" en su nombre.
+    *   **Validez:** Se eliminan contratos sin valor (0), sin NIT de entidad, o no adjudicados.
+*   **Clasificación de Modalidades:** Se crea una variable binaria `simplificada` que agrupa:
+    *   Contratación Directa.
+    *   Mínima Cuantía.
+    *   Selección Abreviada de Menor Cuantía.
+    *   Régimen Especial.
+    *   *Excluye:* Licitaciones públicas, subastas inversas, concursos de méritos.
+*   **Recuperación Geográfica:** Se implementa un algoritmo de búsqueda de texto para imputar el municipio correcto en registros donde el campo ciudad aparece como "No Definido", utilizando el nombre de la entidad contratante.
+
+### 3. Construcción de la Base Final (`scripts/final_database.py`)
+*   **Cruce de Información:** Se realiza un *inner join* entre la base electoral (Outsiders) y la base de contratación (SECOP) utilizando nombres normalizados de municipio y departamento (sin tildes, minúsculas).
+*   **Definición de Periodos:**
+    *   **Periodo de Análisis (Variable Dependiente):** 2020-2023 (Mandato del alcalde electo en 2019).
+    *   **Periodo de Control (Covariables):** 2015 - Septiembre 2019 (Histórico previo para pruebas de balance).
+*   **Variables Calculadas:**
+    *   `pct_simplif_count`: Porcentaje de contratos adjudicados vía modalidad simplificada (en cantidad).
+    *   `pct_simplif_value`: Porcentaje del valor total adjudicado vía modalidad simplificada.
+    *   `HHI`: Índice Herfindahl-Hirschman de concentración de contratistas.
+
+## Análisis Econométrico (R)
+
+El script `scripts/01_rdd_analysis.R` ejecuta el diseño RDD:
+
+1.  **Estimación:** Regresiones polinómicas locales (`rdrobust`) para estimar el salto en la contratación simplificada en el umbral donde gana un Outsider (margen = 0).
+2.  **Robustez:**
+    *   Variación de anchos de banda (Óptimo MSE, 0.5x, 2.0x).
+    *   Inclusión de polinomios de grado 1 y 2.
+    *   Control por covariables históricas (contratación pasada).
+3.  **Validación:**
+    *   **Test de McCrary:** Verifica que no haya manipulación en la densidad de elecciones alrededor del umbral de victoria.
+    *   **Pruebas de Placebo:** Verifica que no existan discontinuidades en variables pre-determinadas (ej. número de contratos o valor contratado en el periodo anterior).
+
+## Requisitos de Instalación
+
+### Python
 ```bash
 pip install -r requirements.txt
 ```
 
-### Instalación adicional para Playwright
+### R
+Paquetes necesarios:
+- `tidyverse`
+- `rdrobust`
+- `rddensity`
+- `stargazer`
 
-Después de instalar los paquetes, es necesario instalar los navegadores de Playwright:
+## Resultados
 
-```bash
-python -m playwright install chromium
-```
+Los resultados gráficos y tablas se generan automáticamente en la carpeta `stores/`.
+- **Tablas:** `rdd_results_pct_simplif_count.tex`
+- **Gráficos:** `rdd_plot_*.png`
 
-## 📂 Estructura del proyecto
-
-```
-final-paper/
-├── datasets/
-│   ├── 01_raw/                                # Datos crudos sin procesar
-│   │   ├── secop_contratacion.csv             # Base de datos SECOP contratación
-│   │   ├── secop_proponentes.csv              # Base de datos SECOP proponentes
-│   │   └── resultados_{departamento}_{año}.csv # Resultados electorales por depto/año
-│   └── 02_intermediate/                       # Datos procesados intermedios
-│       ├── resultados_electorales_intermediate.csv # Top 2 candidatos por municipio
-│       └── alcaldes_ganadores_2015.csv        # Alcaldes ganadores 2015
-├── scripts/
-│   ├── extract_secop_contratacion.py      # Extrae datos de contratación
-│   ├── extract_secop_proponentes.py       # Extrae datos de proponentes
-│   ├── extract_resultados_electorales.py  # Extrae resultados electorales
-│   ├── extract_alcaldes_2015.py           # Extrae alcaldes ganadores 2015 (Wikipedia)
-│   └── process_resultados_alcaldias.py    # Procesa resultados de alcaldías
-└── requirements.txt
-```
-
-## 🚀 Scripts disponibles
-
-### 1. Extracción de datos SECOP - Contratación
-
-Extrae datos de contratación pública desde la API de datos abiertos de Colombia:
-
-```bash
-python scripts/extract_secop_contratacion.py
-```
-
-- **Fuente**: https://www.datos.gov.co/resource/p6dx-8zbt.json
-- **Salida**: `datasets/01_raw/secop_contratacion.csv`
-- **Características**:
-  - ~8M de registros
-  - Paginación automática (lotes de 50,000)
-  - Guarda chunks intermedios cada 100,000 registros
-  - Elimina chunks automáticamente al finalizar
-
-### 2. Extracción de datos SECOP - Proponentes
-
-Extrae datos de proponentes/proveedores en procesos de contratación:
-
-```bash
-python scripts/extract_secop_proponentes.py
-```
-
-- **Fuente**: https://www.datos.gov.co/resource/hgi6-6wh3.json
-- **Salida**: `datasets/01_raw/secop_proponentes.csv`
-- **Características**:
-  - Paginación automática
-  - Incluye NIT y códigos de proveedores
-  - Sistema de chunks para seguridad
-
-### 3. Extracción de resultados electorales
-
-Descarga resultados electorales por departamento usando web scraping:
-
-```bash
-python scripts/extract_resultados_electorales.py
-```
-
-- **Fuente**: Registraduría Nacional del Estado Civil
-- **Salida**: `datasets/01_raw/resultados_{departamento}_{año}.csv`
-- **Años**: 2019, 2023
-- **Características**:
-  - Web scraping con Playwright + descarga directa con requests
-  - Descarga archivos ZIP, extrae CSV automáticamente
-  - Formato estandarizado: `resultados_departamento_año.csv`
-  - Detección automática de selectores según el año
-  - Barra de progreso de descarga
-  - Limpieza automática de archivos ZIP después de extracción
-  - Skip automático de archivos ya descargados
-
-### 4. Procesamiento de resultados de alcaldías
-
-Procesa los resultados electorales para obtener los top 2 candidatos por municipio:
-
-```bash
-python scripts/process_resultados_alcaldias.py
-```
-
-- **Entrada**: `datasets/01_raw/resultados_*_2019.csv`
-- **Salida**: `datasets/02_intermediate/resultados_electorales_intermediate.csv`
-- **Características**:
-  - Filtra solo resultados de alcaldías
-  - Excluye votos no marcados, en blanco y nulos
-  - Agrupa y suma votos por candidato en cada municipio
-  - Extrae top 2 candidatos con más votos por municipio
-  - Consolida todos los departamentos en un solo archivo
-  - Incluye información de departamento, municipio, candidato y partido
-
-### 5. Extracción de alcaldes ganadores 2015
-
-Extrae información de alcaldes ganadores en 2015 desde Wikipedia:
-
-```bash
-python scripts/extract_alcaldes_2015.py
-```
-
-- **Fuente**: Wikipedia - Elecciones regionales de Colombia de 2015
-- **Salida**: `datasets/02_intermediate/alcaldes_ganadores_2015.csv`
-- **Características**:
-  - Web scraping con BeautifulSoup
-  - Extrae alcaldes ganadores por municipio
-  - Incluye departamento, municipio, candidato ganador y partido
-  - Datos consolidados de todo el país
-
-## 📊 Información de los datasets
-
-### SECOP Contratación
-Incluye información sobre:
-- Entidad contratante
-- Proceso de contratación
-- Modalidad y tipo de contrato
-- Valores y fechas
-- Estado del proceso
-- Proveedor adjudicado
-
-### SECOP Proponentes
-Incluye información sobre:
-- ID del procedimiento
-- Fecha de publicación
-- Entidad compradora
-- Proveedor/Proponente
-- NITs y códigos
-
-### Resultados Electorales (Raw)
-Incluye información sobre:
-- Resultados por departamento y municipio
-- Datos de elecciones 2019 y 2023
-- Votos por mesa, candidato y corporación
-- Información electoral detallada
-
-### Resultados Electorales (Intermediate)
-Dataset procesado con:
-- Top 2 candidatos con más votos por municipio
-- Solo elecciones de alcaldía (2019)
-- Votos válidos (excluye blancos, nulos y no marcados)
-- Datos consolidados de todos los departamentos
-- Información de candidato, partido y municipio
-
-### Alcaldes Ganadores 2015
-Dataset extraído de Wikipedia con:
-- Alcaldes ganadores por municipio (2015)
-- Departamento y municipio
-- Nombre del candidato ganador
-- Partido político del ganador
-- Datos de todo el país
-
-## ⚙️ Configuración
-
-### Cambiar años de resultados electorales
-
-Edita la variable `YEARS` en `scripts/extract_resultados_electorales.py`:
-
-```python
-YEARS = ["2019", "2023"]  # Agregar o quitar años según necesidad
-```
-
-### Ajustar tamaño de lotes SECOP
-
-En los scripts de SECOP, ajusta `batch_size` en la clase extractora:
-
-```python
-self.batch_size = 50000  # Máximo recomendado por Socrata
-```
-
-## 🔧 Solución de problemas
-
-### Error de Playwright
-Si obtienes un error relacionado con Playwright:
-```bash
-python -m playwright install chromium
-```
-
-### Error de timeout en descargas
-Ajusta el parámetro en el script:
-```python
-main(headless=True, pause_between_downloads_sec=1.5)  # Aumentar el delay
-```
-
-### Memoria insuficiente
-Los scripts guardan chunks intermedios automáticamente para evitar problemas de memoria.
-
-## 📝 Notas
-
-- Los scripts muestran progreso en tiempo real con barras de progreso (tqdm)
-- Todos los logs incluyen timestamps para facilitar el debugging
-- Los archivos intermedios se eliminan automáticamente al finalizar
-- Las carpetas de salida se crean automáticamente si no existen
-
-## 🤝 Contribuciones
-
-Este proyecto es parte del trabajo final del curso de Econometría Avanzada - PEG Uniandes.
-
+## Autores
+Proyecto realizado para el curso de Econometría Avanzada - PEG Uniandes.
