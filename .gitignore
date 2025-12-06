@@ -7,7 +7,6 @@
 *.parquet
 
 # Carpetas de datos
-datasets/
 data/
 downloads/
 
