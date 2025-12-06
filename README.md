@@ -68,13 +68,12 @@ El pipeline de datos realiza una limpieza exhaustiva para asegurar la calidad de
     *   **Periodo de Análisis (Variable Dependiente):** 2020-2023 (Mandato del alcalde electo en 2019).
     *   **Periodo de Control (Covariables):** 2015 - Septiembre 2019 (Histórico previo para pruebas de balance).
 *   **Variables Calculadas:**
-    *   `pct_simplif_count`: Porcentaje de contratos adjudicados vía modalidad simplificada (en cantidad).
     *   `pct_simplif_value`: Porcentaje del valor total adjudicado vía modalidad simplificada.
     *   `HHI`: Índice Herfindahl-Hirschman de concentración de contratistas.
 
 ## Análisis Econométrico (R)
 
-El script `scripts/01_rdd_analysis.R` ejecuta el diseño RDD:
+El script `scripts/02_rdd_analysis.R` ejecuta el diseño RDD:
 
 1.  **Estimación:** Regresiones polinómicas locales (`rdrobust`) para estimar el salto en la contratación simplificada en el umbral donde gana un Outsider (margen = 0).
 2.  **Robustez:**

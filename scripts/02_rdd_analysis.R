@@ -32,20 +32,20 @@ saveRDS(df_rdd, file = file.path(output_dir, "final_database_rdd.rds"))
 message("Base de datos guardada en: ", file.path(output_dir, "final_database_rdd.rds"))
 
 # 4. Correr Regresión Discontinua (RDD) - Multiples Especificaciones
-# Variable dependiente: pct_simplif_count
+# Variable dependiente: HHI
 # Running variable: margen_victoria
 
 # Definir variables
-y_var <- df_rdd$pct_simplif_count
+y_var <- df_rdd$HHI
 x_var <- df_rdd$margen_victoria
 
 # Preparar matrices para modelos con controles
-vars_controls <- c("log_valor_ctrl", "num_contratos_ctrl", "pct_simplif_count_ctrl", "pct_simplif_value_ctrl")
+vars_controls <- c("log_valor_ctrl", "num_contratos_ctrl", "HHI_ctrl", "pct_simplif_value_ctrl")
 df_clean <- df_rdd %>% 
   drop_na(all_of(vars_controls)) %>%
-  filter(!is.na(pct_simplif_count))
+  filter(!is.na(HHI))
 
-y_clean <- df_clean$pct_simplif_count
+y_clean <- df_clean$HHI
 x_clean <- df_clean$margen_victoria
 covs_clean <- df_clean %>% select(all_of(vars_controls))
 
@@ -68,15 +68,6 @@ m4_halfbw <- rdrobust(y = y_clean, x = x_clean, c = cutoff, covs = covs_clean, p
 # 5. Ancho de Banda Doble (2.0x), Lineal, Con Controles
 m5_doublebw <- rdrobust(y = y_clean, x = x_clean, c = cutoff, covs = covs_clean, p = 1, h = 2.0 * bw_opt)
 
-# Imprimir información sobre los anchos de banda usados
-message("------------------------------------------------")
-message("Anchos de banda utilizados (h):")
-message("1. Óptimo (MSE): ", round(bw_opt, 4))
-message("2. Mitad (0.5x): ", round(0.5 * bw_opt, 4))
-message("3. Doble (2.0x): ", round(2.0 * bw_opt, 4))
-message("------------------------------------------------")
-
-# 6. Presentar todas en una tabla de LaTeX
 
 # Función auxiliar ajustada para incluir metadatos
 extract_rd_details <- function(model, name, poly, bw_type) {
@@ -105,19 +96,19 @@ results_table <- bind_rows(rows)
 
 # Generar tabla LaTeX consolidada y guardar en stores
 latex_out <- stargazer(results_table, summary = FALSE, type = "latex", 
-                       title = "Resultados RDD: Robustez ante BW y Polinomios (Var: pct_simplif_count)", 
+                       title = "Resultados RDD: Robustez ante BW y Polinomios (Var: HHI)", 
                        rownames = FALSE)
-writeLines(latex_out, con = store_file("rdd_results_pct_simplif_count.tex"))
+writeLines(latex_out, con = store_file("rdd_results_hhi.tex"))
 
 # 7. Graficar la regresión discontinua
 # Usando rdplot para visualización automática de bines y polinomios
-png(filename = store_file("rdd_plot_pct_simplif_count.png"), width = 800, height = 600)
+png(filename = store_file("rdd_plot_hhi.png"), width = 800, height = 600)
 rdplot(
   y = y_clean,
   x = x_clean,
   c = cutoff,
-  title = "Regresión Discontinua: % Simplificado (Conteo de Contratos) vs Margen de Victoria",
-  y.label = "% Simplificado",
+  title = "Regresión Discontinua: HHI vs Margen de Victoria",
+  y.label = "HHI",
   x.label = "Margen de Victoria"
 )
 dev.off()
@@ -127,10 +118,7 @@ dev.off()
 # a) Prueba de No Manipulación (McCrary Density Test)
 # Se usa la variable de asignación original o limpia según preferencia; usualmente se reporta sobre la muestra usada.
 dens_test <- rddensity(x_clean, c = cutoff)
-print("Resultado de la prueba de densidad de McCrary:")
 summary(dens_test)
-# Capturar y mostrar el estadístico T y P-value explícitamente si se desea en log o reporte
-cat("\nEstadístico de prueba (T):", dens_test$test$t_jk, "\nP-value:", dens_test$test$p_jk, "\n")
 
 # Guardar gráfico McCrary en stores
 png(filename = store_file("rdd_mccrary_density.png"), width = 800, height = 600)
@@ -165,8 +153,6 @@ dev.off()
 # SEGUNDA VARIABLE DEPENDIENTE: % Valor Contratos Simplificados (pct_simplif_value)
 # ==============================================================================
 
-message("\n=== INICIANDO ANÁLISIS PARA % VALOR SIMPLIFICADO ===\n")
-
 # Preparar matrices para modelos con controles (Sample 2)
 # Aseguramos muestra limpia para esta variable
 df_clean_val <- df_rdd %>% 
@@ -194,14 +180,6 @@ m4_halfbw_val <- rdrobust(y = y_clean_val, x = x_clean_val, c = cutoff, covs = c
 
 # 5. Ancho de Banda Doble (2.0x), Lineal, Con Controles
 m5_doublebw_val <- rdrobust(y = y_clean_val, x = x_clean_val, c = cutoff, covs = covs_clean_val, p = 1, h = 2.0 * bw_opt_val)
-
-# Imprimir información sobre los anchos de banda usados
-message("------------------------------------------------")
-message("Anchos de banda utilizados (h) - % Valor:")
-message("1. Óptimo (MSE): ", round(bw_opt_val, 4))
-message("2. Mitad (0.5x): ", round(0.5 * bw_opt_val, 4))
-message("3. Doble (2.0x): ", round(2.0 * bw_opt_val, 4))
-message("------------------------------------------------")
 
 # Compilar resultados para tabla
 rows_val <- list(
@@ -231,6 +209,4 @@ rdplot(
   x.label = "Margen de Victoria"
 )
 dev.off()
-
-message("Script finalizado exitosamente.")
 
