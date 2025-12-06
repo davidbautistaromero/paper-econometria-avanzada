@@ -229,11 +229,14 @@ res_hhi = (m_hhi.assign(sq=lambda x: x["s_i"]**2)
 res_hhi["HHI_10000"] = (res_hhi["HHI"] * 10000).round(0)
 
 # --- CÁLCULO CONCENTRACIÓN 2020-2023 ---
+# Corregido: calcular procesos_simplif contando IDs únicos, no sumando filas booleanas
 res_conc = (
-    df_main.groupby(group_keys).agg(
-        procesos_simplif=('simplificada', 'sum'),
-        valor_total_conc=('valor_total_adjudicacion', 'sum'), 
-        valor_simplif=('valor_total_adjudicacion', lambda x: x[df_main.loc[x.index, 'simplificada']].sum())
+    df_main.groupby(group_keys).apply(
+        lambda x: pd.Series({
+            'procesos_simplif': x.loc[x['simplificada'], 'id_del_proceso'].nunique(),
+            'valor_total_conc': x['valor_total_adjudicacion'].sum(),
+            'valor_simplif': x.loc[x['simplificada'], 'valor_total_adjudicacion'].sum()
+        })
     ).reset_index()
 )
 
@@ -273,12 +276,17 @@ def calculate_metrics_custom_period(df_subset, suffix):
     if df_p.empty:
         return pd.DataFrame(columns=["nit_entidad"])
     
-    aggs = df_p.groupby("nit_entidad").agg(
-        num_contratos_p=('id_del_proceso', 'nunique'),
-        valor_total_p=('valor_total_adjudicacion', 'sum'),
-        simplificada_count=('simplificada', 'sum'),
-        simplificada_valor=('valor_total_adjudicacion', lambda x: x[df_p.loc[x.index, 'simplificada']].sum())
-    ).reset_index()
+    # Corregido para controles también: usar nunique para evitar > 100%
+    # Agregación personalizada usando apply para conteos únicos correctos
+    def agg_funcs(x):
+        return pd.Series({
+            'num_contratos_p': x['id_del_proceso'].nunique(),
+            'valor_total_p': x['valor_total_adjudicacion'].sum(),
+            'simplificada_count': x.loc[x['simplificada'], 'id_del_proceso'].nunique(),
+            'simplificada_valor': x.loc[x['simplificada'], 'valor_total_adjudicacion'].sum()
+        })
+
+    aggs = df_p.groupby("nit_entidad").apply(agg_funcs).reset_index()
     
     aggs[f"log_valor_{suffix}"] = np.log(aggs["valor_total_p"] + 1)
     aggs[f"num_contratos_{suffix}"] = aggs["num_contratos_p"]
